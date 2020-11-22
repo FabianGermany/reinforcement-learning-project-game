@@ -1,16 +1,20 @@
 #STEP(1): Import libraries
+#-----------------------------------------------------------------------------------------------------------------------
 import gym
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
 
-#STEP(2): xxxxxxxxx
-
-
-env = gym.make('CarRacing-v0') #other famous game is CartPole-v0
+#STEP(2): Declare Parameters
+#-----------------------------------------------------------------------------------------------------------------------
 duration_of_sim = 1000; #duration of simulation in ms
 n_iterations = 3; #number of iterations
+
+
+#STEP(3): Learn and test
+#-----------------------------------------------------------------------------------------------------------------------
+env = gym.make('CarRacing-v0')
 for i_episode in range(n_iterations):
     observation = env.reset()
     for t in range(duration_of_sim):
