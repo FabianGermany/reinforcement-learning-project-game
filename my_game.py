@@ -1,7 +1,7 @@
 #STEP (1): Import libraries
 #-----------------------------------------------------------------------------------------------------------------------
 import gym
-from gym.envs.registration import registry, register, make, spec #for custom registration/game version
+from gym.envs.registration import register#, registry, make, spec #for custom registration/game version
 import numpy as np
 import pandas as pd
 #import tensorflow as tf
@@ -11,11 +11,12 @@ from keras.models import Sequential
 from keras.layers import Dense
 from keras.optimizers import Adam
 from collections import deque
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 import random
-import time
-from IPython.display import clear_output
-import h5py #saving big data (e.g. q learning table)
+#import time
+#from IPython.display import clear_output
+#import h5py #saving and reloading big data (e.g. q learning table)
+#import csv #saving and reloading big data (e.g. q learning table)
 
 #STEP (2): Register custom game
 #-----------------------------------------------------------------------------------------------------------------------
@@ -37,8 +38,9 @@ mode = "reinforcement-learning-q-learning"
 #mode_no_learning_pattern = "specific_action"
 mode_no_learning_pattern = "random"
 render_active = True
+render_check_sometimes = False #only render sometimes
 #render_active = False
-reuse_improved_q_table = False
+reuse_improved_q_table = True
 reuse_improved_agent = False
 
 
@@ -46,20 +48,23 @@ reuse_improved_agent = False
 #STEP (4): Define reusable functions
 #-----------------------------------------------------------------------------------------------------------------------
 
-#get single pixels from whole image (better here than changing settings in gym files)
+#get single pixels from whole image (better here than changing settings in gym files); count from top left to buttom right
+# only green channel: third array arg. is 1 [0:2]
+# the three centers of 0...95 are about 16,30 and 80
 def get_nine_pixels(image):
-    q11 = image[16, 16, 1]  # only green channel: third array arg. is 1 [0:2]
-    q12 = image[16, 48, 1]
-    q13 = image[16, 80, 1]
+    q11 = image[80, 16, 1]
+    q12 = image[72, 48, 1] #this is an exception cause image[80, 48, 1] would point to the car itself
+    q13 = image[80, 80, 1]
     q21 = image[48, 16, 1]
     q22 = image[48, 48, 1]
     q23 = image[48, 80, 1]
-    q31 = image[80, 16, 1]
-    q32 = image[80, 48, 1]
-    q33 = image[80, 80, 1]
+    q31 = image[16, 16, 1]
+    q32 = image[16, 48, 1]
+    q33 = image[16, 80, 1]
     nine_pixels = [q11, q12, q13, q21, q22, q23, q31, q32, q33]
     return nine_pixels
 
+#simplify 0...255 area to 0...3 area
 def discretize_RGB_val(list_of_256_value): #from 0...255 RGB value to [0,1,2,3]
     list_of_discretized_value = [None] * len(list_of_256_value)  # initialize list
     for i in range(len(list_of_256_value)):
@@ -72,6 +77,40 @@ def discretize_RGB_val(list_of_256_value): #from 0...255 RGB value to [0,1,2,3]
         else: #list_of_256_value[i]<256
             list_of_discretized_value[i] = 3
     return list_of_discretized_value
+
+#convert ndarray [0,0...,0] to decimal number
+    # [0,0,0,0,0,0,0,0,0] --> Row 1
+    # [0,0,0,0,0,0,0,0,1] --> Row 2
+    # [0,0,0,0,0,0,0,0,2] --> Row 3
+    # [0,0,0,0,0,0,0,0,3] --> Row 4
+    # [0,0,0,0,0,0,0,1,0] --> Row 5
+    # ...
+    # [3,3,3,3,3,3,3,3,3] --> Row 5
+    # is correct: we have state_space_size_combinations = 262144 combinations:
+    # 262144[Base10] = 1000000000[Base4]
+    # 262143[Base10] = 333333333[Base4]
+def conv_base_4_ndarray_to_decimal_index (array):
+    # to get the right row in the q learning table you need to convert the array [0,0,....,1] etc. to an index:
+    # 1 merge the the 9 numbers to one number
+    observation_as_one_int_base_4_as_string = str(array[0]) \
+                                            + str(array[1])\
+                                            + str(array[2])\
+                                            + str(array[3])\
+                                            + str(array[4])\
+                                            + str(array[5])\
+                                            + str(array[6])\
+                                            + str(array[7])\
+                                            + str(array[8])
+
+    # 2 convert this number from base4 to base10 (decimal) = index
+    observation_as_one_int_base_10 = int(observation_as_one_int_base_4_as_string,4) #int converts back to decimal
+    index_row_q_table = observation_as_one_int_base_10 #this is the index
+    return index_row_q_table
+
+#combination of the three functions defined above: nine pixels, discretize values and convert ndarray to decimal index
+def custom_observation_conversion(data):
+    converted_data = conv_base_4_ndarray_to_decimal_index(discretize_RGB_val(get_nine_pixels(data)))
+    return converted_data
 
 
 #STEP (5): Load Environment
@@ -151,7 +190,7 @@ if (mode == "no-learning"):
 
     for i_episode in range(n_iterations_no_training):
         observation = env.reset()
-        observation_focus = discretize_RGB_val(get_nine_pixels(observation)) #only use 9 pixels; and discretize values
+        observation_focus = custom_observation_conversion(observation) #only use 9 pixels; and discretize values; and convert to decimal index
         for t in range(duration_of_sim):
             if(render_active): env.render() #render one frame
             if(mode_no_learning_pattern == "specific_action"):
@@ -159,7 +198,7 @@ if (mode == "no-learning"):
             elif (mode_no_learning_pattern == "random"):
                 action = env.action_space.sample()  # take a random action;
             observation, reward, done, info = env.step(action) # step delivers: observation (=state), reward, done and info
-            observation_focus = discretize_RGB_val(get_nine_pixels(observation)) #only use 9 pixels; and discretize values
+            observation_focus = custom_observation_conversion(observation) #only use 9 pixels; and discretize values; and convert to decimal index
 
             #limit observation to single pixels
             print("Step {}:".format(t))
@@ -186,18 +225,23 @@ elif (mode == "reinforcement-learning-q-learning"):
     print('Training Agent')
     print('**********************************')
 
-    n_iterations_training = 50  # number of iterations for reinforcement testing
-    duration_of_sim = 600  # duration of simulation in ms
+    n_iterations_training = 40  # number of iterations for reinforcement testing
+    duration_of_sim = 4000  # duration of simulation in ms
 
     gamma = 0.8  # future reward
     alpha = 0.3  # learning rate
     epsilon = 0.1 #todo
 
-    #maybe use former q_table and optimize it
+    #maybe use former q_table and optimize it: using hdf5 or csv
     if(reuse_improved_q_table):
-        file_q_table_input = h5py.File("stored_agent/q-learning-table.hdf5", "r")
-        q_table = file_q_table_input.get('dataset_learnt')
-        file_q_table_input.close()
+        #file_q_table_input = h5py.File("stored_agent/q-learning-table.hdf5", "r")
+        #q_table = file_q_table_input.get('dataset_learnt')
+        #file_q_table_input.close()
+        q_table = pd.read_csv('stored_agent/q-learning-table.csv',  header=None, sep=';')
+        #q_table from csv is in pd-df format: reconvert to ndarray format
+        q_table = q_table.to_numpy()
+        print("Existing Q table has been loaded.\n")
+
     else:
         q_table = np.zeros((state_space_size_combinations, action_space_size)) #initialize q-table with zeros
 
@@ -210,26 +254,31 @@ elif (mode == "reinforcement-learning-q-learning"):
     for i_episode in range(n_iterations_training):
         print("Starting Iteration {}".format(i_episode))
         observation = env.reset()
-        observation_focus = discretize_RGB_val(get_nine_pixels(observation))  # only use 9 pixels; and discretize values
+        observation_focus = custom_observation_conversion(observation) #only use 9 pixels; and discretize values; and convert to decimal index
         reward = 0
+        cumulated_reward = 0
         done = False
 
         for t in range(duration_of_sim):
             print("Starting Step {0} in Iteration {1}".format(t,i_episode))
-            if(render_active): env.render()
+            if(render_check_sometimes):
+                if(render_active):
+                    if(t%(duration_of_sim/4)==0):#render only a couple of times per episode to see whether everything is fine or there is a bug like blackscreen
+                        env.render()
+            else: #NOT render_check_sometimes
+                if(render_active):
+                    env.render()
             if random.uniform(0, 1) < epsilon:
                 action = env.action_space.sample()  # Explore action space
-            else:
-
-                action = np.argmax(q_table[observation_focus,:])  # Exploit learned values
-                #action_flattened_data = np.argmax(a=q_table[observation_focus,:])  # Exploit learned values; check for current observation the action with maximum value and deliver the col (=action)
-                #action = action_flattened_data%q_table.shape[1] #first was flattened data, this gives really the col number form 0-12; todo bin mir nicht sicher ob das so stimmt
+            else: # Exploit learned values / take the best action from the Q table refering to the corresponding observation
+                action = np.argmax(q_table[observation_focus,:])
 
             print("Action: {}".format(action))
             # Take action
             next_observation, reward, done, info = env.step(action) # step delivers: observation (=state), reward, done and info
-            next_observation_focus = discretize_RGB_val(get_nine_pixels(next_observation)) #only use 9 pixels; and discretize values
+            next_observation_focus = custom_observation_conversion(next_observation) #only use 9 pixels; and discretize values; and convert to decimal index
 
+            cumulated_reward += reward #add current reward to cumulated reward
 
             # Recalculate
             q_value = q_table[observation_focus, action]
@@ -246,23 +295,27 @@ elif (mode == "reinforcement-learning-q-learning"):
             #     env.render()
 
             print("Observation/State: \n{}".format(observation_focus))
-            print("Reward: {}".format(reward))
+            print("Reward: {:+0.2f}".format(reward))
+            print("Cumulated Reward: {:+0.2f}".format(cumulated_reward))
             print("Done: {}".format(done))
             print("Info: {}".format(info))
-            print("Q table: {}" .format(q_table))
+            #print("Q table: {}" .format(q_table))
 
             if done:
                 print("Episode finished after {} timesteps".format(t+1))
                 break
 
-
+        # regularly save q table as hdf5 file or csv file
+        if((i_episode%30==0) or (i_episode==n_iterations_training)):
+            #file_q_table_output = h5py.File("stored_agent/q-learning-table.hdf5", "w")
+            #file_q_table_output.create_dataset('dataset_learnt', data=q_table)
+            #file_q_table_output.close()
+            q_table_as_df = pd.DataFrame(q_table)
+            q_table_as_df.to_csv('stored_agent/q-learning-table.csv',index=False, header=False, sep=';')
+            print("Q table has been stored.\n")
 
     env.close()
 
-    # save q table as hdf5 file
-    file_q_table_output = h5py.File("stored_agent/q-learning-table.hdf5", "w")
-    file_q_table_output.create_dataset('dataset_learnt', data=q_table)
-    file_q_table_output.close()
 
 
     print('**********************************')
@@ -283,25 +336,22 @@ elif (mode == "reinforcement-learning-q-learning"):
 
     for i_episode in range(n_iterations_testing):
         observation = env.reset()
-        observation_focus = discretize_RGB_val(get_nine_pixels(observation))  # only use 9 pixels; and discretize values
+        observation_focus = custom_observation_conversion(observation) #only use 9 pixels; and discretize values; and convert to decimal index
         timesteps = 0
         penalties = 0
         reward = 0
 
         terminated = False
         while not terminated:
-            action = np.argmax(q_table[observation,:])
-            #action_flattened_data = np.argmax(a=q_table[observation_focus,:])  # Exploit learned values; check for current observation the action with maximum value and deliver the col (=action)
-            #action = action_flattened_data % q_table.shape[1]  # first was flattened data, this gives really the col number form 0-12; todo bin mir nicht sicher ob das so stimmt
-
+            action = np.argmax(q_table[observation_focus, :])
             print("Action: {}".format(action))
 
             observation, reward, terminated, info = env.step(action)
-            observation_focus = discretize_RGB_val(get_nine_pixels(observation)) #only use 9 pixels; and discretize values
+            observation_focus = custom_observation_conversion(observation) #only use 9 pixels; and discretize values; and convert to decimal index
 
 
             print("Observation/State: \n{}".format(observation_focus))
-            print("Reward: {}".format(reward))
+            print("Reward: {:+0.2f}".format(reward))
             print("Done: {}".format(done))
             print("Info: {}".format(info))
 
@@ -413,8 +463,9 @@ elif (mode == "reinforcement-learning-deep-q-learning"):
         for i_episode in range(n_iterations_deep_q):
             print("Starting Iteration {}".format(i_episode))
             state = env.reset()
-            state_focus = discretize_RGB_val(get_nine_pixels(state))  # only use 9 pixels; and discretize values
-            state_focus = np.reshape(state_focus, [1, state_space_size_combinations]) #todo warum nicht von 0 bis n-1 (bei dem anderen auch)
+            state_focus = custom_observation_conversion(state) #only use 9 pixels; and discretize values; and convert to decimal index
+            # todo ggf. anpassen, weil hier die Vereinfachung vllt gar nicht erforderlich....
+            #state_focus = np.reshape(state_focus, [1, state_space_size_combinations])
             reward = 0
             done = False
             batch_size = 32
@@ -424,6 +475,7 @@ elif (mode == "reinforcement-learning-deep-q-learning"):
             # Our goal is to keep the pole upright as long as possible until score of 500
             # the more time_t the more score
             for t in range(duration_of_sim):
+                print("Starting Step {0} in Iteration {1}".format(t, i_episode))
                 if (render_active): env.render()  # render one frame
 
                 # Decide action
@@ -432,10 +484,9 @@ elif (mode == "reinforcement-learning-deep-q-learning"):
                 print("Action: {}".format(action))
 
                 next_state, reward, done, info = env.step(action)   # Advance the game to the next frame based on the action.
-                next_state_focus = discretize_RGB_val(get_nine_pixels(next_state))  # only use 9 pixels; and discretize values
-                next_state_focus = discretize_RGB_val(get_nine_pixels(next_state_focus))  # only use 9 pixels; and discretize values
+                next_state_focus = custom_observation_conversion(next_state) #only use 9 pixels; and discretize values; and convert to decimal index
 
-                next_state_focus = np.reshape(next_state_focus, [1, state_space_size_combinations]) #todo warum nicht von 0 bis n-1 (bei dem anderen auch)
+                #next_state_focus = np.reshape(next_state_focus, [1, state_space_size_combinations]) #todo warum nicht von 0 bis n-1 (bei dem anderen auch)
 
                 # memorize the previous state, action, reward, and done
                 agent.memorize(state, action, reward, next_state_focus, done)
