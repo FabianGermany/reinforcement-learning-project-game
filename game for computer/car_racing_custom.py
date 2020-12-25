@@ -107,6 +107,7 @@ class FrictionDetector(contactListener):
             obj.tiles.add(tile)
             if not tile.road_visited:
                 tile.road_visited = True
+                #self.env.reward = 0
                 self.env.reward += 1000.0 / len(self.env.track)
                 self.env.tile_visited_count += 1
         else:
@@ -151,6 +152,7 @@ class CarRacingCustom(gym.Env, EzPickle):
         self.fd_tile = fixtureDef(
             shape=polygonShape(vertices=[(0, 0), (1, 0), (1, -1), (0, -1)])
         )
+
 
         #continuous values: use spaces.box
         #discrete values: use spaces.discrete
@@ -383,7 +385,7 @@ class CarRacingCustom(gym.Env, EzPickle):
                 )
         self.car = Car(self.world, *self.track[0][1:4])
 
-        return self.step(None)[0]
+        return self.step(None)[0] #special case: Action is NONE
 
 
 
@@ -402,6 +404,7 @@ class CarRacingCustom(gym.Env, EzPickle):
         elif action == 10: action = [-0.5, 0, 0.5] #ACTION_DECELERATE_AND_TURN_LEFT_SOFT
         elif action == 11: action = [0.5, 0, 0.5] #ACTION_DECELERATE_AND_TURN_RIGHT_SOFT
         elif action == 12: action = [0, 0, 0]  #ACTION_DO_NOTHING
+        elif (action is None): action = None #special case: used for reset-step
         else: print("ERROR because invalid action has been used.")
 
         return action
@@ -428,6 +431,14 @@ class CarRacingCustom(gym.Env, EzPickle):
         done = False
         if action is not None:  # First step without action, called from reset()
             self.reward -= 0.1
+
+            # #reward for good speed
+            # real_speed = np.sqrt(
+            #     np.square(self.car.hull.linearVelocity[0])
+            #     + np.square(self.car.hull.linearVelocity[1]))
+            # self.reward += (real_speed/500)
+
+
             # We actually don't want to count fuel spent, we want car to be faster.
             # self.reward -=  10 * self.car.fuel_spent / ENGINE_POWER
             self.car.fuel_spent = 0.0
@@ -522,6 +533,9 @@ class CarRacingCustom(gym.Env, EzPickle):
         arr = np.fromstring(image_data.get_data(), dtype=np.uint8, sep="")
         arr = arr.reshape(VP_H, VP_W, 4)
         arr = arr[::-1, :, 0:3]
+        #grayscale
+        #arr_bw = np.dot(arr[..., :3], [0.299, 0.587, 0.114])
+        #arr = arr_bw
 
         return arr
 
@@ -693,6 +707,7 @@ if __name__ == "__main__":
                 #print("\naction " + str(["{:+0.2f}".format(x) for x in a]))
                 print("\naction " + str(["{}".format(x) for x in a]))
                 print("step {} total_reward {:+0.2f}".format(steps, total_reward))
+                print("step {} current reward {:+0.2f}".format(steps, r))
             steps += 1
             isopen = env.render()
             if done or restart or isopen == False:
