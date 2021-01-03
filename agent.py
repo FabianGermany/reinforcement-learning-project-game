@@ -37,9 +37,8 @@ mode = "reinforcement-learning-q-learning"
 # mode = "reinforcement-learning-deep-q-learning"
 #mode_no_learning_pattern = "specific_action"
 mode_no_learning_pattern = "random"
-render_active = False
+render_active = True
 render_check_sometimes = False #only render sometimes
-render_active = False
 reuse_improved_q_table = True
 reuse_improved_agent = False
 
@@ -185,10 +184,11 @@ if (mode == "no-learning"):
     ACTION_DECELERATE_AND_TURN_RIGHT_SOFT = [0.5, 0, 0.5]
     ACTION_DO_NOTHING = [0, 0, 0]
 
-    n_iterations_no_training = 5  # number of iterations for casual
+    n_iterations_no_training = 35  # number of iterations for casual
     cumulated_reward_added_up = 0
     average_reward_added_up = 0
     all_iterations_added_up = 0
+    list_of_average_rewards = []
 
     for i_episode in range(n_iterations_no_training):
         print("Starting Iteration {}".format(i_episode))
@@ -223,6 +223,7 @@ if (mode == "no-learning"):
         print("Average reward per iteration: {:+0.3f}".format(cumulated_reward / duration_of_sim))
         cumulated_reward_added_up += cumulated_reward
         average_reward_added_up += (cumulated_reward / duration_of_sim)
+        list_of_average_rewards = np.append(list_of_average_rewards, (cumulated_reward / duration_of_sim))
 
 
     env.close()
@@ -233,8 +234,17 @@ if (mode == "no-learning"):
 
     print("Results after {} iterations:".format(n_iterations_no_training))
     print("**********************************")
-    print("Average cumulative reward {:+0.2f}".format(cumulated_reward_added_up / n_iterations_no_training))
-    print("Average reward per iteration for all iterations (average) {:+0.3f}".format(average_reward_added_up / n_iterations_no_training))
+    #print("Average cumulative reward {:+0.2f}".format(cumulated_reward_added_up / n_iterations_no_training))
+    #print("Average reward per iteration for all iterations (average) {:+0.3f}".format(average_reward_added_up / n_iterations_no_training))
+
+    list_of_average_rewards_rounded = ['%.3f' % elem for elem in list_of_average_rewards] #round list entries
+    print("This list of all average rewards is:")
+    print(', '.join(list_of_average_rewards_rounded)) #makes the print without quotes
+
+    print("Average reward per iteration for all iterations (average) {:+0.3f}".format(np.mean(list_of_average_rewards)))
+    print("Standard deviation: {:+0.3f}".format(np.std(list_of_average_rewards)))
+
+
 
 #######################################################################################################################
 #STEP (7B): #Q-Learning
@@ -245,10 +255,10 @@ elif (mode == "reinforcement-learning-q-learning"):
     print('**********************************')
 
     # STEP (7B.1): #Parameters
-    n_iterations_training = 53  # number of iterations for reinforcement testing
+    n_iterations_training = 0  # number of iterations for reinforcement testing
 
     gamma = 0.5  # discount factor = future reward (0: short-term/greedy; 1: long-term)
-    alpha = 0.3  # learning rate (0: learn nothing/just exploit prior knowledge; 1: ignore prior knowledge/focus on most recent information
+    alpha = 0.4  # learning rate (0: learn nothing/just exploit prior knowledge; 1: ignore prior knowledge/focus on most recent information
     epsilon = 0.1 #used for epsilon-greedy algorithm (balance between explore and exploit; high value: explore; low value: exploit)
     # (epsilon might also be non-constant and change from high value to zero in the course of time...)
 
@@ -308,7 +318,7 @@ elif (mode == "reinforcement-learning-q-learning"):
             # STEP (7B.7): #Recalculate and update Q-table
             q_value = q_table[observation_focus, action] #get current/old q-value from current/old table
             max_value = np.max(q_table[next_observation_focus]) #get the value of the action of current observation for best action
-            new_q_value = (1 - alpha) * q_value + alpha * (reward + gamma * max_value) #updata qvalue using bellman equation
+            new_q_value = (1 - alpha) * q_value + alpha * (reward + gamma * max_value) #update qvalue using bellman equation
             q_table[observation_focus, action] = new_q_value #update Q-table; use old state and action
             observation_focus = next_observation_focus #the new state will become the old one
 
@@ -344,13 +354,15 @@ elif (mode == "reinforcement-learning-q-learning"):
     print('**********************************')
 
     # STEP (7B.9): #Parameters for testing
-    n_iterations_testing = 4  # number of iterations for reinforcement training
+    n_iterations_testing = 35  # number of iterations for reinforcement training
     cumulated_reward_added_up = 0
     average_reward_added_up = 0
     all_iterations_added_up = 0
+    list_of_average_rewards = []
 
     # STEP (7B.10): #Start outer loop for testing
     for i_episode in range(n_iterations_testing):
+        print("Iteration No. {}".format(i_episode))
         observation = env.reset()
         observation_focus = custom_observation_conversion(observation) #only use 9 pixels; and discretize values; and convert to decimal index
         reward = 0
@@ -384,8 +396,11 @@ elif (mode == "reinforcement-learning-q-learning"):
         # STEP (7B.13): #Print results about current iteration
         print("Cumulative reward: {:+0.2f}".format(cumulated_reward))
         print("Average reward per iteration: {:+0.3f}".format(cumulated_reward / duration_of_sim))
+
+
         cumulated_reward_added_up += cumulated_reward
         average_reward_added_up += (cumulated_reward / duration_of_sim)
+        list_of_average_rewards = np.append(list_of_average_rewards, (cumulated_reward / duration_of_sim))
 
     env.close()
 
@@ -395,9 +410,15 @@ elif (mode == "reinforcement-learning-q-learning"):
     # STEP (7B.14): #Print overall results
     print("Results after {} iterations:".format(n_iterations_testing))
     print("**********************************")
-    print("Average cumulative reward {:+0.2f}".format(cumulated_reward_added_up / n_iterations_testing))
-    print("Average reward per iteration for all iterations (average) {:+0.3f}".format(average_reward_added_up / n_iterations_testing))
+    #print("Average cumulative reward {:+0.2f}".format(cumulated_reward_added_up / n_iterations_testing))
+    #print("Average reward per iteration for all iterations (average) {:+0.3f}".format(average_reward_added_up / n_iterations_testing))
 
+    list_of_average_rewards_rounded = ['%.3f' % elem for elem in list_of_average_rewards] #round list entries
+    print("This list of all average rewards is:")
+    print(', '.join(list_of_average_rewards_rounded)) #makes the print without quotes
+
+    print("Average reward per iteration for all iterations (average) {:+0.3f}".format(np.mean(list_of_average_rewards)))
+    print("Standard deviation: {:+0.3f}".format(np.std(list_of_average_rewards)))
 
     #inspired by https://www.learndatasci.com/tutorials/reinforcement-q-learning-scratch-python-openai-gym/
 
