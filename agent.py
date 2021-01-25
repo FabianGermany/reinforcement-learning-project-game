@@ -184,7 +184,7 @@ if (mode == "no-learning"):
     ACTION_DECELERATE_AND_TURN_RIGHT_SOFT = [0.5, 0, 0.5]
     ACTION_DO_NOTHING = [0, 0, 0]
 
-    n_iterations_no_training = 35  # number of iterations for casual
+    n_iterations_no_training = 35  # number of iterations for performing the actions
     cumulated_reward_added_up = 0
     average_reward_added_up = 0
     all_iterations_added_up = 0
@@ -255,7 +255,7 @@ elif (mode == "reinforcement-learning-q-learning"):
     print('**********************************')
 
     # STEP (7B.1): #Parameters
-    n_iterations_training = 0  # number of iterations for reinforcement testing
+    n_iterations_training = 0  # number of iterations for reinforcement training
 
     gamma = 0.5  # discount factor = future reward (0: short-term/greedy; 1: long-term)
     alpha = 0.4  # learning rate (0: learn nothing/just exploit prior knowledge; 1: ignore prior knowledge/focus on most recent information
@@ -424,7 +424,7 @@ elif (mode == "reinforcement-learning-q-learning"):
 
 
 #######################################################################################################################
-#STEP (7C): #DQN Learning
+#STEP (7C): #DQN Learning (not successfully implemented yet TODO)
 #######################################################################################################################
 elif (mode == "reinforcement-learning-deep-q-learning"):
         n_iterations_deep_q = 52
@@ -496,13 +496,9 @@ elif (mode == "reinforcement-learning-deep-q-learning"):
 
         print('Deep Q CNN Agent created.')
 
-
-
         print('**********************************')
         print('Training Deep Q CNN Agent')
         print('**********************************')
-
-
 
         # Iterate the game
         for i_episode in range(n_iterations_deep_q):
@@ -514,7 +510,6 @@ elif (mode == "reinforcement-learning-deep-q-learning"):
             reward = 0
             done = False
             batch_size = 32
-
 
             # time_t represents each frame of the game
             # Our goal is to keep the pole upright as long as possible until score of 500
@@ -560,15 +555,11 @@ elif (mode == "reinforcement-learning-deep-q-learning"):
         print('Deep Q CNN Agent trained.')
 
 
-
-
         print('**********************************')
         print('Test Deep Q CNN Agent')
         print('**********************************')
 
 
         print('Deep Q CNN Agent tested.')
-
-
 
 #input("Press enter to exit this program.")
